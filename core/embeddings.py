@@ -1,10 +1,14 @@
 from sentence_transformers import SentenceTransformer
 import numpy as np
-import streamlit as st
 
-@st.cache_resource
+_model = None
+
 def load_model():
-    return SentenceTransformer('all-MiniLM-L6-v2')
+    """Load the embedding model once per process and reuse it."""
+    global _model
+    if _model is None:
+        _model = SentenceTransformer('all-MiniLM-L6-v2')
+    return _model
 
 def get_embeddings(chunks: list[str]) -> np.ndarray:
     model = load_model()
