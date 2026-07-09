@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Finance RAG</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<header class="header">
+  <span class="eyebrow">Tool-calling agent · not just RAG</span>
+  <h1>Finance RAG</h1>
+  <p class="subtitle">Ask about your spending in plain English — totals and counts are computed exactly, not guessed by a language model.</p>
+</header>
+
+<div class="columns">
+
+  <section class="column">
+    <div class="card">
+      <div class="card-icon">01</div>
+      <h2>Upload transactions</h2>
+      <p class="card-desc">A CSV with your transaction history builds a searchable index behind the scenes.</p>
+
+      <label class="file-drop" id="fileDropLabel">
+        <input type="file" id="fileInput" accept=".csv">
+        <span id="fileLabelText">Choose a CSV file</span>
+      </label>
+
+      <button id="uploadBtn">Upload CSV</button>
+      <div id="uploadStatus" class="status"></div>
+      <p class="hint">Required columns: <code>date, amount, category, description</code></p>
+    </div>
+  </section>
+
+  <section class="column">
+    <div class="card">
+      <div class="card-icon">02</div>
+      <h2>Ask a question</h2>
+      <p class="card-desc">The agent decides per question: exact computation, or semantic search.</p>
+
+      <input type="text" id="questionInput" placeholder="How much did I spend on food?" disabled>
+      <button id="askBtn" disabled>Ask</button>
+      <div id="queryStatus" class="status"></div>
+      <div id="answerBox" class="answer-box">
+        <div id="answerText"></div>
+        <span id="toolTag" class="tool-tag"></span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>

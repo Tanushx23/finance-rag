@@ -58,12 +58,13 @@ def _build_tools(categories: list[str], min_date: str, max_date: str) -> list[di
             "function": {
                 "name": "compute_total_spent",
                 "description": (
-                    "Compute the exact total amount spent and transaction count, "
-                    "optionally filtered by category and/or date range. ALWAYS use "
-                    "this for any question asking for a sum, total, count, or "
-                    "'how much'/'how many' -- never add or count things yourself, "
-                    "and never use semantic_search for counting (it only returns "
-                    "a limited sample of matches, not the full count)."
+                    "Compute the exact total amount spent, transaction count, and "
+                    "average amount per transaction, optionally filtered by "
+                    "category and/or date range. ALWAYS use this for any question "
+                    "asking for a sum, total, count, or average -- never add, "
+                    "count, or divide numbers yourself, and never use "
+                    "semantic_search for counting (it only returns a limited "
+                    "sample of matches, not the full count)."
                 ),
                 "parameters": {
                     "type": "object",
@@ -163,15 +164,16 @@ def _build_tools(categories: list[str], min_date: str, max_date: str) -> list[di
 
 SYSTEM_PROMPT = """You are a personal finance assistant for Indian Rupee (INR)
 transactions. Always use the RUPEE symbol (₹), never $, and use the exact
-formatted strings from tool results rather than reformatting numbers yourself.
-You have three tools: `compute_total_spent` for any sum/total/count/"how much"/
-"how many" question, `get_top_transaction` for "most expensive"/"biggest"/
-"cheapest"/"smallest" questions, and `semantic_search` for open-ended questions
-about specific transactions (never for counting or ranking by amount -- it
-only returns a limited sample ranked by meaning, not by amount or count).
-Always call a tool rather than computing totals, counting, ranking by amount,
-or guessing dates from memory. After you get a tool result, answer the user's
-question clearly and concisely based only on that result."""
+formatted strings from tool results (e.g. total_formatted, average_formatted)
+rather than reformatting or recalculating numbers yourself.
+You have three tools: `compute_total_spent` for any sum/total/count/average/
+"how much"/"how many" question, `get_top_transaction` for "most expensive"/
+"biggest"/"cheapest"/"smallest" questions, and `semantic_search` for
+open-ended questions about specific transactions (never for counting or
+ranking by amount -- it only returns a limited sample ranked by meaning).
+Always call a tool rather than computing totals, counts, averages, rankings,
+or dates yourself. After you get a tool result, answer the user's question
+clearly and concisely based only on that result."""
 
 
 def _resolve_category(category: str, valid_categories: list[str]) -> str | None:
@@ -221,10 +223,18 @@ def _compute_total_spent(df: pd.DataFrame, category=None, start_date=None, end_d
 
     total = float(filtered["amount"].sum())
     count = int(len(filtered))
+    # Compute the average here in pandas rather than letting the model
+    # divide total/count itself in its final answer -- simple division
+    # happened to come out clean in testing ($8650/10 = $865), but nothing
+    # guaranteed the model would do that arithmetic correctly every time
+    # (same root problem as the original "add up these chunks" bug).
+    average = total / count if count > 0 else 0.0
 
     return {
         "total": total,
         "total_formatted": f"₹{total:,.0f}",
+        "average": average,
+        "average_formatted": f"₹{average:,.0f}",
         "transaction_count": count,
         "category": resolved_category or "all categories",
         "start_date": start_date,

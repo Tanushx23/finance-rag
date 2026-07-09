@@ -86,6 +86,21 @@ def test_resolve_category_case_insensitive_typo():
 def test_resolve_category_no_match_returns_none():
     assert _resolve_category("Bitcoin", ["Food", "Shopping"]) is None
 
+def test_average_is_computed_exactly_not_by_the_model(df):
+    """The model once divided total/count itself in its final answer text
+    (which happened to come out clean: 8650/10 = 865) instead of using a
+    computed field. This locks in a case with messier division (1850/4 =
+    462.5) so the average is always exact, not dependent on the model's
+    own arithmetic."""
+    result = _compute_total_spent(df, category="Food")
+    assert result["average"] == 462.5
+    assert result["average_formatted"] == "₹462"
+
+
+def test_average_with_no_filters(df):
+    result = _compute_total_spent(df)
+    assert result["average"] == 865.0
+
 
 def test_most_expensive_transaction_overall(df):
     """Before this tool existed, 'most expensive purchase' had to go through

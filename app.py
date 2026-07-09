@@ -5,7 +5,7 @@ import logging
 from collections import OrderedDict
 
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, render_template
 
 from core.parser import load_transactions_df, build_chunks
 from core.embeddings import get_embeddings
@@ -29,12 +29,17 @@ if not os.getenv("GROQ_API_KEY"):
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
-# In-memory session store: session_id -> {"store": VectorStore, "df": DataFrame}
-# Fine for a demo/resume project. Swap for Redis or on-disk persistence
-# if this needs to survive a server restart or run with multiple workers.
-# Bounded + FIFO eviction so a long-running server doesn't leak memory
-# indefinitely as people upload files -- real fix for real deployment is
-# a TTL-based store (Redis with expiry), this is a simple stopgap.
+# Warm up the embedding model at startup, not on the first real request.
+# Without this, the model's first download/load happens mid-request --
+# on Windows specifically, this caused a real bug: Flask's debug
+# auto-reloader saw the newly-downloaded model files appear on disk mid-
+# download and restarted the whole server, killing the in-flight request
+# (showed up in the browser as a generic "network error"). Loading it here
+# means the download/load is finished before the server ever accepts a
+# request.
+logger.info("Warming up embedding model...")
+get_embeddings(["warmup"])
+logger.info("Embedding model ready.")
 MAX_SESSIONS = 100
 SESSIONS = OrderedDict()
 
@@ -43,6 +48,10 @@ def _store_session(session_id: str, data: dict):
     SESSIONS[session_id] = data
     if len(SESSIONS) > MAX_SESSIONS:
         SESSIONS.popitem(last=False)  # evict oldest
+
+@app.route("/")
+def index():
+    return render_template("index.html")
 
 
 @app.route("/health")
@@ -111,4 +120,10 @@ def query():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # use_reloader=False: the auto-reloader restarts the whole process
+    # whenever it sees files change on disk -- which includes files written
+    # by fastembed/faiss during normal operation, not just your own code
+    # edits. That caused a real bug (see the warmup comment above). Debug
+    # error pages still work fine with the reloader off; you'll just need
+    # to manually restart (Ctrl+C, rerun) after editing code.
+    app.run(debug=True, use_reloader=False)
