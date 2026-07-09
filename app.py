@@ -6,6 +6,8 @@ from collections import OrderedDict
 
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, session, render_template
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 from core.parser import load_transactions_df, build_chunks
 from core.embeddings import get_embeddings
@@ -29,6 +31,20 @@ if not os.getenv("GROQ_API_KEY"):
 app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 
+# Rate limiting: this app is public, uses a personal GROQ_API_KEY, and
+# /upload builds a fresh embedding index each time (real compute cost).
+# Without a limit, anyone (or a bot) hitting these endpoints repeatedly
+# could burn through the API quota or fill memory with sessions. In-memory
+# storage is fine here since we're already single-worker (see Dockerfile)
+# and sessions are already in-memory -- consistent with the rest of the
+# app's demo-scale tradeoffs.
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["60 per hour"],
+    storage_uri="memory://",
+)
+
 # Warm up the embedding model at startup, not on the first real request.
 # Without this, the model's first download/load happens mid-request --
 # on Windows specifically, this caused a real bug: Flask's debug
@@ -36,6 +52,7 @@ app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev-secret-change-me")
 # download and restarted the whole server, killing the in-flight request
 # (showed up in the browser as a generic "network error"). Loading it here
 # means the download/load is finished before the server ever accepts a
+
 # request.
 logger.info("Warming up embedding model...")
 get_embeddings(["warmup"])
@@ -55,11 +72,13 @@ def index():
 
 
 @app.route("/health")
+@limiter.exempt
 def health():
     return jsonify({"status": "ok"})
 
 
 @app.route("/upload", methods=["POST"])
+@limiter.limit("10 per hour")
 def upload():
     file = request.files.get("file")
     if not file or not file.filename.lower().endswith(".csv"):
@@ -95,6 +114,7 @@ def upload():
 
 
 @app.route("/query", methods=["POST"])
+@limiter.limit("20 per hour")
 def query():
     data = request.get_json(silent=True) or {}
     question = (data.get("question") or "").strip()
