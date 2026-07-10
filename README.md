@@ -1,8 +1,5 @@
 # Finance RAG
 
-![Uploading image.png…]()
-
-
 Upload a CSV of transactions and ask questions about your spending in natural language — powered by a small tool-calling agent, not just plain RAG.
 
 **Live app:** https://finance-rag-oj4n.onrender.com
