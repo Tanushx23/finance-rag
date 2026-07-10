@@ -108,6 +108,16 @@ body {
 .file-drop:hover { border-color: var(--accent); color: var(--text); }
 .file-drop input[type="file"] { display: none; }
 
+.sample-link {
+  display: inline-block;
+  font-size: 13px;
+  color: var(--accent);
+  text-decoration: none;
+  margin-bottom: 16px;
+}
+
+.sample-link:hover { text-decoration: underline; }
+
 input[type="text"] {
   width: 100%;
   padding: 15px 16px;

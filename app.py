@@ -5,7 +5,7 @@ import logging
 from collections import OrderedDict
 
 from dotenv import load_dotenv
-from flask import Flask, request, jsonify, session, render_template
+from flask import Flask, request, jsonify, session, render_template, send_from_directory
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
@@ -69,6 +69,14 @@ def _store_session(session_id: str, data: dict):
 @app.route("/")
 def index():
     return render_template("index.html")
+
+@app.route("/sample-csv")
+def sample_csv():
+    # Lets visitors without their own transaction data try the live demo
+    # end-to-end -- reuses the same file the test suite is built against.
+    return send_from_directory(
+        app.root_path, "test_transactions.csv", as_attachment=True
+    )
 
 
 @app.route("/health")
