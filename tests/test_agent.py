@@ -7,7 +7,7 @@ import io
 import pytest
 
 from core.parser import load_transactions_df
-from core.agent import _compute_total_spent, _resolve_category, _get_top_transaction
+from core.agent import _compute_total_spent, _resolve_category, _get_top_transaction, _get_category_breakdown
 
 
 SAMPLE_CSV = """date,amount,category,description
@@ -125,4 +125,21 @@ def test_most_expensive_within_category(df):
 
 def test_top_transaction_with_no_matches_returns_error(df):
     result = _get_top_transaction(df, direction="max", start_date="2030-01-01")
+    assert "error" in result
+
+def test_category_breakdown_ranks_correctly(df):
+    """Before this tool existed, 'which category do I spend most on' had
+    no reliable path -- the agent would either need several separate
+    compute_total_spent calls or guess via semantic_search. This locks in
+    the correct ranked breakdown against known totals."""
+    result = _get_category_breakdown(df)
+    assert result["top_category"] == "Shopping"
+    assert result["breakdown"][0]["total"] == 4200.0
+    assert result["breakdown"][-1]["category"] == "Transport"
+    total_pct = sum(item["percent_of_total"] for item in result["breakdown"])
+    assert abs(total_pct - 100.0) < 0.5
+
+
+def test_category_breakdown_with_no_matches_returns_error(df):
+    result = _get_category_breakdown(df, start_date="2030-01-01")
     assert "error" in result

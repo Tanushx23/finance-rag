@@ -143,6 +143,34 @@ def _build_tools(categories: list[str], min_date: str, max_date: str) -> list[di
         {
             "type": "function",
             "function": {
+                "name": "get_category_breakdown",
+                "description": (
+                    "Get total spending per category, ranked highest to lowest, "
+                    "optionally filtered by date range. Use this for 'which "
+                    "category do I spend the most on', 'breakdown by category', "
+                    "or 'top spending categories' style questions -- do NOT "
+                    "answer these by calling compute_total_spent multiple times "
+                    "or by guessing from semantic_search."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "start_date": {
+                            "type": ["string", "null"],
+                            "description": f"YYYY-MM-DD inclusive lower bound. Data spans {min_date} to {max_date}. Use null for no lower bound.",
+                        },
+                        "end_date": {
+                            "type": ["string", "null"],
+                            "description": f"YYYY-MM-DD inclusive upper bound. Data spans {min_date} to {max_date}. Use null for no upper bound.",
+                        },
+                    },
+                    "required": [],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "semantic_search",
                 "description": (
                     "Search transactions by meaning for open-ended or fuzzy "
@@ -166,14 +194,16 @@ SYSTEM_PROMPT = """You are a personal finance assistant for Indian Rupee (INR)
 transactions. Always use the RUPEE symbol (₹), never $, and use the exact
 formatted strings from tool results (e.g. total_formatted, average_formatted)
 rather than reformatting or recalculating numbers yourself.
-You have three tools: `compute_total_spent` for any sum/total/count/average/
+You have four tools: `compute_total_spent` for any sum/total/count/average/
 "how much"/"how many" question, `get_top_transaction` for "most expensive"/
-"biggest"/"cheapest"/"smallest" questions, and `semantic_search` for
-open-ended questions about specific transactions (never for counting or
-ranking by amount -- it only returns a limited sample ranked by meaning).
+"biggest"/"cheapest"/"smallest" questions, `get_category_breakdown` for
+"which category do I spend most on" / spending-breakdown questions, and
+`semantic_search` for open-ended questions about specific transactions
+(never for counting, ranking, or breakdowns -- it only returns a limited
+sample ranked by meaning).
 Always call a tool rather than computing totals, counts, averages, rankings,
-or dates yourself. After you get a tool result, answer the user's question
-clearly and concisely based only on that result."""
+breakdowns, or dates yourself. After you get a tool result, answer the
+user's question clearly and concisely based only on that result."""
 
 
 def _resolve_category(category: str, valid_categories: list[str]) -> str | None:
@@ -275,6 +305,39 @@ def _get_top_transaction(df: pd.DataFrame, direction="max", category=None, start
         "description": row["description"],
     }
 
+def _get_category_breakdown(df: pd.DataFrame, start_date=None, end_date=None) -> dict:
+    filtered = df
+    if start_date:
+        filtered = filtered[filtered["date"] >= pd.to_datetime(start_date)]
+    if end_date:
+        filtered = filtered[filtered["date"] <= pd.to_datetime(end_date)]
+
+    if len(filtered) == 0:
+        return {"error": "No transactions match those filters."}
+
+    grand_total = float(filtered["amount"].sum())
+    grouped = (
+        filtered.groupby("category")["amount"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    breakdown = [
+        {
+            "category": category,
+            "total": float(total),
+            "total_formatted": f"₹{total:,.0f}",
+            "percent_of_total": round(float(total) / grand_total * 100, 1) if grand_total > 0 else 0.0,
+        }
+        for category, total in grouped.items()
+    ]
+
+    return {
+        "breakdown": breakdown,
+        "top_category": breakdown[0]["category"] if breakdown else None,
+        "grand_total_formatted": f"₹{grand_total:,.0f}",
+    }
+
 
 def _semantic_search(vector_store, query: str, k: int = 8) -> dict:
     # k bumped from 5 -> 8: with only 5, a genuinely broad question ("show
@@ -341,6 +404,8 @@ def answer_question(question: str, df: pd.DataFrame, vector_store) -> dict:
             result = _compute_total_spent(df, **args)
         elif name == "get_top_transaction":
             result = _get_top_transaction(df, **args)
+        elif name == "get_category_breakdown":
+            result = _get_category_breakdown(df, **args)
         elif name == "semantic_search":
             result = _semantic_search(vector_store, **args)
         else:
