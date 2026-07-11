@@ -11,9 +11,10 @@ Plain RAG asks the LLM to add up retrieved numbers itself — unreliable. Testin
 
 > "You spent 1750 on Food... 400+600+350+500=1850... the correct total is 1850."
 
-Fix: a tool-calling agent that routes each question to one of three tools:
+Fix: a tool-calling agent that routes each question to one of four tools:
 - **`compute_total_spent`** — exact pandas computation for totals, counts, averages, and date ranges
 - **`get_top_transaction`** — deterministic max/min lookup for "most expensive" / "cheapest" questions
+- **`get_category_breakdown`** — ranked spending by category, with exact percentages
 - **`semantic_search`** — FAISS retrieval for genuinely open-ended questions
 
 The LLM only picks a tool and phrases the result — it never does the math.
@@ -32,8 +33,9 @@ Open `http://127.0.0.1:5000` — upload a CSV, then ask questions.
 
 ## API
 - `GET /` — web UI
-- `POST /upload` — multipart `file` (CSV with `date, amount, category, description`) → `{session_id, transactions_loaded}`
-- `POST /query` — `{"question"}` (session tracked via cookie) → `{"answer", "tool_used"}`
+- `POST /upload` — multipart `file` (CSV with `date, amount, category, description`) → `{session_id, transactions_loaded}` *(rate limited: 10/hour per IP)*
+- `POST /query` — `{"question"}` (session tracked via cookie) → `{"answer", "tool_used"}` *(rate limited: 20/hour per IP)*
+- `GET /sample-csv` — downloads example transaction data for visitors without their own
 - `GET /health` → `{"status": "ok"}`
 
 ## Testing
@@ -41,7 +43,7 @@ Open `http://127.0.0.1:5000` — upload a CSV, then ask questions.
 pip install -r requirements-dev.txt
 pytest tests/ -v
 ```
-19 tests, each mapped to a real bug found while building this (arithmetic errors, category mismatches, date-year assumptions, undercounting, unreliable averaging).
+21 tests, each mapped to a real bug found while building this (arithmetic errors, category mismatches, date-year assumptions, undercounting, unreliable averaging, incorrect category rankings).
 
 ## Deployment
 Dockerized (see `Dockerfile`) and deployed on Render's free tier. Two real issues surfaced only at deployment and are fixed in code:
@@ -54,8 +56,8 @@ Dockerized (see `Dockerfile`) and deployed on Render's free tier. Two real issue
 - **Date disambiguation**: the LLM is told the data's actual date range, so "Jan 1–15" with no year doesn't default to the current year.
 - **Averages computed in pandas**, not by the model — same reasoning as totals; division that looks clean in one test case isn't guaranteed to always be correct.
 - **Model**: switched from a deprecated Groq model to `openai/gpt-oss-120b`, with a one-retry safety net for occasional malformed tool calls.
+- **Rate limited** (Flask-Limiter, in-memory): 10 uploads/hour and 20 questions/hour per IP, since this is a public deployment using a personal API key.
 
 ## Next steps
 - Multi-turn conversation memory
-- Dedicated category-breakdown tool
 - Redis-backed sessions for persistence across restarts/sleep cycles
