@@ -17,7 +17,10 @@ def load_transactions_df(file) -> pd.DataFrame:
         raise ValueError(f"CSV is missing required column(s): {', '.join(missing)}")
 
     df = df.dropna(subset=REQUIRED_COLUMNS)
-    df["description"] = df.get("description", "").fillna("")
+    if "description" in df.columns:
+        df["description"] = df["description"].fillna("")
+    else:
+        df["description"] = ""
 
     df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
     df = df.dropna(subset=["amount"])

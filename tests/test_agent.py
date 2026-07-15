@@ -28,7 +28,16 @@ SAMPLE_CSV = """date,amount,category,description
 def df():
     return load_transactions_df(io.BytesIO(SAMPLE_CSV.encode("utf-8")))
 
-
+def test_parser_handles_missing_description_column():
+    """Regression test: df.get('description', '').fillna('') crashed with
+    AttributeError when the description column was entirely absent, since
+    df.get() returns a plain string fallback (not a Series) in that case,
+    and strings have no .fillna(). CSVs with only date/amount/category
+    (no description) must parse successfully with empty descriptions."""
+    csv_without_description = "date,amount,category\n2024-01-05,500,Food\n"
+    df = load_transactions_df(io.BytesIO(csv_without_description.encode("utf-8")))
+    assert df["description"].tolist() == [""]
+    
 def test_category_total_is_correct(df):
     """The original bug: the LLM was asked to add these numbers itself and
     got 1750, then self-corrected mid-sentence to 1850. This must now be
