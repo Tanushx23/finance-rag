@@ -257,7 +257,7 @@ def _compute_total_spent(df: pd.DataFrame, category=None, start_date=None, end_d
     # divide total/count itself in its final answer -- simple division
     # happened to come out clean in testing ($8650/10 = $865), but nothing
     # guaranteed the model would do that arithmetic correctly every time
-    # (same root problem as the original "add up these chunks" bug).
+
     average = total / count if count > 0 else 0.0
 
     return {
@@ -339,13 +339,15 @@ def _get_category_breakdown(df: pd.DataFrame, start_date=None, end_date=None) ->
     }
 
 
-def _semantic_search(vector_store, query: str, k: int = 8) -> dict:
-    # k bumped from 5 -> 8: with only 5, a genuinely broad question ("show
-    # me all my food purchases") could silently truncate real matches out
-    # of the result. 8 is still cheap for FAISS and gives the LLM more to
-    # work with for open-ended questions.
+def _semantic_search(vector_store, query: str) -> dict:
+    # Threshold-based retrieval instead of a fixed k: a fixed count either
+    # truncates real matches on a broad question ("all my food purchases",
+    # if there are more than k) or pads results with irrelevant chunks on
+    # a narrow one. search_by_threshold returns everything genuinely
+    # related (with a safety cap + fallback so results are never empty
+    # or unbounded) -- see VectorStore.search_by_threshold for details.
     query_embedding = get_embeddings([query])[0]
-    results = vector_store.search(query_embedding, k=k)
+    results = vector_store.search_by_threshold(query_embedding)
     return {"matching_transactions": results}
 
 

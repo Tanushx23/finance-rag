@@ -16,9 +16,5 @@ COPY . .
 ENV PORT=5000
 EXPOSE 5000
 
-# --workers 1 is required, not a performance choice: SESSIONS is an
-# in-memory dict, so with >1 worker process a request could land on a
-# worker that never saw the original /upload, and "session not found"
-# errors would appear randomly. Fixing this properly means moving SESSIONS
-# to Redis (see README limitations) -- until then, stay single-worker.
+
 CMD gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 app:app
